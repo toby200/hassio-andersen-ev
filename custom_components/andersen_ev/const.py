@@ -15,10 +15,6 @@ SERVICE_GET_DEVICE_INFO = "get_device_info"
 SERVICE_GET_DEVICE_STATUS = "get_device_status"
 SERVICE_RCM_RESET = "reset_rcm"
 
-# Storage
-STORAGE_VERSION = 1
-STORAGE_KEY = f"{DOMAIN}.auth_tokens"
-
 # Attributes
 ATTR_DEVICE_ID = "device_id"
 ATTR_DURATION = "duration"

@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import logging
+from typing import ClassVar
 
 import dateutil.parser
-
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
@@ -38,7 +38,7 @@ async def async_setup_entry(
 
     entities = []
     for device in coordinator.data:
-        # Create energy sensors from historical data
+        # Energy sensors from historical data
         entities.append(
             AndersenEvEnergySensor(
                 coordinator,
@@ -80,6 +80,7 @@ async def async_setup_entry(
             )
         )
 
+        # Live status sensors
         entities.append(
             AndersenEvLiveSensor(
                 coordinator,
@@ -146,7 +147,7 @@ async def async_setup_entry(
             )
         )
 
-        # Create cost sensors from historical data
+        # Cost sensors from historical data
         entities.append(
             AndersenEvCostSensor(
                 coordinator,
@@ -188,11 +189,10 @@ async def async_setup_entry(
             )
         )
 
-        # Create connector state sensor
+        # Connector state sensor
         entities.append(AndersenEvConnectorSensor(coordinator, device))
 
-        # Create realtime charge status sensors
-        # Power sensors
+        # Realtime charge status sensors - power
         entities.append(
             AndersenEvChargeStatusSensor(
                 coordinator,
@@ -246,7 +246,7 @@ async def async_setup_entry(
             )
         )
 
-        # Energy sensors from realtime status
+        # Realtime charge status sensors - energy
         entities.append(
             AndersenEvChargeStatusSensor(
                 coordinator,
@@ -308,14 +308,7 @@ async def async_setup_entry(
 class AndersenEvBaseSensor(CoordinatorEntity, SensorEntity):
     """Base class for Andersen EV sensors."""
 
-    def __init__(
-        self,
-        coordinator: AndersenEvCoordinator,
-        device,
-        sensor_type,
-        name_suffix,
-        data_key=None,
-    ) -> None:
+    def __init__(self, coordinator: AndersenEvCoordinator, device, sensor_type, name_suffix, data_key=None) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
         self._device = device
@@ -327,7 +320,7 @@ class AndersenEvBaseSensor(CoordinatorEntity, SensorEntity):
             "identifiers": {(DOMAIN, device.device_id)},
             "name": f"{device.friendly_name} ({device.device_id})",
             "manufacturer": "Andersen EV",
-            "model": "A2",  # Default model, will be updated if available from device status
+            "model": "A2",
         }
         self._last_charge = None
         self._update_model_from_device_status()
@@ -344,8 +337,8 @@ class AndersenEvBaseSensor(CoordinatorEntity, SensorEntity):
         if hasattr(self._device, "model_name") and self._device.model_name:
             self._attr_device_info["model"] = self._device.model_name
         # Fall back to the information from device status
-        elif hasattr(self._device, "_last_status") and self._device._last_status:
-            status = self._device._last_status
+        elif self._device.last_status:
+            status = self._device.last_status
             if "sysProductName" in status:
                 self._attr_device_info["model"] = status["sysProductName"]
             elif "sysProductId" in status:
@@ -355,10 +348,10 @@ class AndersenEvBaseSensor(CoordinatorEntity, SensorEntity):
 
     async def _update_last_charge(self):
         """Get the last charge data for the device."""
-        self._last_charge = await self._device.getLastCharge()
+        self._last_charge = await self._device.get_last_charge()
 
         # Try to update the model with the latest device status
-        if hasattr(self._device, "_last_status"):
+        if self._device.last_status:
             self._update_model_from_device_status()
 
     async def async_update(self):
@@ -384,13 +377,7 @@ class AndersenEvEnergySensor(AndersenEvBaseSensor):
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
 
     def __init__(
-        self,
-        coordinator: AndersenEvCoordinator,
-        device,
-        sensor_type,
-        name_suffix,
-        data_key,
-        icon=None,
+        self, coordinator: AndersenEvCoordinator, device, sensor_type, name_suffix, data_key, icon=None
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator, device, sensor_type, name_suffix, data_key)
@@ -414,13 +401,7 @@ class AndersenEvCostSensor(AndersenEvBaseSensor):
     _attr_native_unit_of_measurement = "GBP"
 
     def __init__(
-        self,
-        coordinator: AndersenEvCoordinator,
-        device,
-        sensor_type,
-        name_suffix,
-        data_key,
-        icon=None,
+        self, coordinator: AndersenEvCoordinator, device, sensor_type, name_suffix, data_key, icon=None
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator, device, sensor_type, name_suffix, data_key)
@@ -439,7 +420,7 @@ class AndersenEvConnectorSensor(CoordinatorEntity, SensorEntity):
     """Sensor for Andersen EV connector state."""
 
     _attr_device_class = SensorDeviceClass.ENUM
-    _attr_options = [
+    _attr_options: ClassVar[list[str]] = [
         "Ready",
         "Connected",
         "Charging",
@@ -459,7 +440,7 @@ class AndersenEvConnectorSensor(CoordinatorEntity, SensorEntity):
             "identifiers": {(DOMAIN, device.device_id)},
             "name": f"{device.friendly_name} ({device.device_id})",
             "manufacturer": "Andersen EV",
-            "model": "A2",  # Default model, will be updated if available from device status
+            "model": "A2",
         }
         if icon:
             self._attr_icon = icon
@@ -475,8 +456,8 @@ class AndersenEvConnectorSensor(CoordinatorEntity, SensorEntity):
         if hasattr(self._device, "model_name") and self._device.model_name:
             self._attr_device_info["model"] = self._device.model_name
         # Fall back to the information from device status
-        elif hasattr(self._device, "_last_status") and self._device._last_status:
-            status = self._device._last_status
+        elif self._device.last_status:
+            status = self._device.last_status
             if "sysProductName" in status:
                 self._attr_device_info["model"] = status["sysProductName"]
             elif "sysProductId" in status:
@@ -504,15 +485,18 @@ class AndersenEvConnectorSensor(CoordinatorEntity, SensorEntity):
                 break
 
         # Check if the device has status information
-        if hasattr(self._device, "_last_status") and self._device._last_status:
-            status = self._device._last_status
+        if self._device.last_status:
+            status = self._device.last_status
             if "evseState" in status:
                 evse_state = status["evseState"]
 
                 # Log if evse_state changes to help debugging
                 if self._last_evse_state != evse_state:
                     _LOGGER.debug(
-                        f"EVSE state changed from {self._last_evse_state} to {evse_state} for {self._device.friendly_name}"
+                        "EVSE state changed from %s to %s for %s",
+                        self._last_evse_state,
+                        evse_state,
+                        self._device.friendly_name,
                     )
                     self._last_evse_state = evse_state
 
@@ -531,9 +515,7 @@ class AndersenEvConnectorSensor(CoordinatorEntity, SensorEntity):
                     self._connector_state = "Disabled"
                 else:
                     # Log unknown states for debugging
-                    _LOGGER.debug(
-                        f"Unknown EVSE state: {evse_state} for {self._device.friendly_name}"
-                    )
+                    _LOGGER.debug("Unknown EVSE state: %s for %s", evse_state, self._device.friendly_name)
                     self._connector_state = "unknown"
 
         return self._connector_state
@@ -549,16 +531,16 @@ class AndersenEvConnectorSensor(CoordinatorEntity, SensorEntity):
 
             # This will make the connector sensor more responsive
             # by getting the most up-to-date status directly from the API
-            status = await self._device.getDetailedDeviceStatus()
+            status = await self._device.get_detailed_device_status()
             if status and "evseState" in status:
                 evse_state = status["evseState"]
                 if self._last_evse_state != evse_state:
                     _LOGGER.debug(
-                        f"Direct API call: EVSE state changed to {evse_state} for {self._device.friendly_name}"
+                        "Direct API call: EVSE state changed to %s for %s", evse_state, self._device.friendly_name
                     )
                     self._last_evse_state = evse_state
-        except Exception as err:
-            _LOGGER.debug(f"Error updating connector state: {err}")
+        except Exception as err:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            _LOGGER.debug("Error updating connector state: %s", err)
 
 
 class AndersenEvChargeStatusSensor(CoordinatorEntity, SensorEntity):
@@ -587,7 +569,7 @@ class AndersenEvChargeStatusSensor(CoordinatorEntity, SensorEntity):
             "identifiers": {(DOMAIN, device.device_id)},
             "name": f"{device.friendly_name} ({device.device_id})",
             "manufacturer": "Andersen EV",
-            "model": "A2",  # Default model, will be updated if available from device status
+            "model": "A2",
         }
         if device_class:
             self._attr_device_class = device_class
@@ -605,8 +587,8 @@ class AndersenEvChargeStatusSensor(CoordinatorEntity, SensorEntity):
         if hasattr(self._device, "model_name") and self._device.model_name:
             self._attr_device_info["model"] = self._device.model_name
         # Fall back to the information from device status
-        elif hasattr(self._device, "_last_status") and self._device._last_status:
-            status = self._device._last_status
+        elif self._device.last_status:
+            status = self._device.last_status
             if "sysProductName" in status:
                 self._attr_device_info["model"] = status["sysProductName"]
             elif "sysProductId" in status:
@@ -622,11 +604,7 @@ class AndersenEvChargeStatusSensor(CoordinatorEntity, SensorEntity):
             if device.device_id == self._device.device_id:
                 self._device = device
                 # Check if chargeStatus exists in last_status
-                if (
-                    hasattr(self._device, "_last_status")
-                    and self._device._last_status
-                    and "chargeStatus" in self._device._last_status
-                ):
+                if self._device.last_status and "chargeStatus" in self._device.last_status:
                     return self.coordinator.last_update_success
         return False
 
@@ -641,19 +619,16 @@ class AndersenEvChargeStatusSensor(CoordinatorEntity, SensorEntity):
 
         # Check if the device has charge status information
         if (
-            hasattr(self._device, "_last_status")
-            and self._device._last_status
-            and "chargeStatus" in self._device._last_status
-            and self._data_key in self._device._last_status["chargeStatus"]
+            self._device.last_status
+            and "chargeStatus" in self._device.last_status
+            and self._data_key in self._device.last_status["chargeStatus"]
         ):
-            value = self._device._last_status["chargeStatus"][self._data_key]
-            if self._attr_device_class == SensorDeviceClass.TIMESTAMP and isinstance(
-                value, str
-            ):
+            value = self._device.last_status["chargeStatus"][self._data_key]
+            if self._attr_device_class == SensorDeviceClass.TIMESTAMP and isinstance(value, str):
                 try:
                     return dateutil.parser.isoparse(value)
                 except ValueError:
-                    _LOGGER.debug(f"Error parsing timestamp: {value}")
+                    _LOGGER.debug("Error parsing timestamp: %s", value)
                     return None
             return value
         return None
@@ -669,9 +644,9 @@ class AndersenEvChargeStatusSensor(CoordinatorEntity, SensorEntity):
 
             # This will make the sensors more responsive
             # by getting the most up-to-date status directly from the API
-            await self._device.getDetailedDeviceStatus()
-        except Exception as err:
-            _LOGGER.debug(f"Error updating charge status sensor: {err}")
+            await self._device.get_detailed_device_status()
+        except Exception as err:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            _LOGGER.debug("Error updating charge status sensor: %s", err)
 
 
 class AndersenEvLiveSensor(CoordinatorEntity, SensorEntity):
@@ -700,7 +675,7 @@ class AndersenEvLiveSensor(CoordinatorEntity, SensorEntity):
             "identifiers": {(DOMAIN, device.device_id)},
             "name": f"{device.friendly_name} ({device.device_id})",
             "manufacturer": "Andersen EV",
-            "model": "A2",  # Default model, will be updated if available from device status
+            "model": "A2",
         }
         if device_class:
             self._attr_device_class = device_class
@@ -718,8 +693,8 @@ class AndersenEvLiveSensor(CoordinatorEntity, SensorEntity):
         if hasattr(self._device, "model_name") and self._device.model_name:
             self._attr_device_info["model"] = self._device.model_name
         # Fall back to the information from device status
-        elif hasattr(self._device, "_last_status") and self._device._last_status:
-            status = self._device._last_status
+        elif self._device.last_status:
+            status = self._device.last_status
             if "sysProductName" in status:
                 self._attr_device_info["model"] = status["sysProductName"]
             elif "sysProductId" in status:
@@ -734,14 +709,8 @@ class AndersenEvLiveSensor(CoordinatorEntity, SensorEntity):
         for device in self.coordinator.data:
             if device.device_id == self._device.device_id:
                 self._device = device
-                if (
-                    hasattr(self._device, "_last_status")
-                    and self._device._last_status
-                    and self._data_key in self._device._last_status
-                ):
-                    _LOGGER.debug(
-                        f"Live available for {self._data_key} is {self.coordinator.last_update_success}"
-                    )
+                if self._device.last_status and self._data_key in self._device.last_status:
+                    _LOGGER.debug("Live available for %s is %s", self._data_key, self.coordinator.last_update_success)
                     return self.coordinator.last_update_success
         return False
 
@@ -755,13 +724,9 @@ class AndersenEvLiveSensor(CoordinatorEntity, SensorEntity):
                 break
 
         # Check if the device has charge status information
-        if (
-            hasattr(self._device, "_last_status")
-            and self._device._last_status
-            and self._data_key in self._device._last_status
-        ):
-            value = self._device._last_status[self._data_key]
-            _LOGGER.debug(f"(Live value for {self._data_key} is {value}")
+        if self._device.last_status and self._data_key in self._device.last_status:
+            value = self._device.last_status[self._data_key]
+            _LOGGER.debug("Live value for %s is %s", self._data_key, value)
             if (
                 hasattr(self, "_attr_device_class")
                 and self._attr_device_class == SensorDeviceClass.TIMESTAMP
@@ -770,7 +735,7 @@ class AndersenEvLiveSensor(CoordinatorEntity, SensorEntity):
                 try:
                     return dateutil.parser.isoparse(value)
                 except ValueError:
-                    _LOGGER.debug(f"Error parsing timestamp: {value}")
+                    _LOGGER.debug("Error parsing timestamp: %s", value)
                     return None
             return value
         return None
@@ -786,6 +751,6 @@ class AndersenEvLiveSensor(CoordinatorEntity, SensorEntity):
 
             # This will make the sensors more responsive
             # by getting the most up-to-date status directly from the API
-            await self._device.getDetailedDeviceStatus()
-        except Exception as err:
-            _LOGGER.debug(f"Error updating live detailed status sensor: {err}")
+            await self._device.get_detailed_device_status()
+        except Exception as err:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            _LOGGER.debug("Error updating live detailed status sensor: %s", err)

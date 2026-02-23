@@ -1,21 +1,37 @@
 DOMAIN = "konnect"
 
-GRAPHQL_URL = 'https://graphql.andersen-ev.com'
-GRAPHQL_USER_MAP_URL = 'https://graphql.andersen-ev.com/get-pending-user'
+GRAPHQL_URL = "https://graphql.andersen-ev.com"
+GRAPHQL_USER_MAP_URL = "https://graphql.andersen-ev.com/get-pending-user"
 
-API_DEVICES_URL = 'https://mobile.andersen-ev.com/api/getDevices'
+API_DEVICES_URL = "https://mobile.andersen-ev.com/api/getDevices"
 
-GRAPHQL_RUN_COMMAND_QUERY = '''
+GRAPHQL_SET_SCHEDULES_MUTATION = """
+mutation setSchedules($deviceId: ID!, $scheduleSlots: ScheduleSlotsInput!) {
+  setSchedules(deviceId: $deviceId, scheduleSlots: $scheduleSlots) {
+    id
+    name
+    return_value
+  }
+}
+"""
+
+GRAPHQL_RUN_COMMAND_QUERY = """
 mutation runAEVCommand($deviceId: ID!, $functionName: String!, $params: String) {
   runAEVCommand(deviceId: $deviceId, functionName: $functionName, params: $params) {
     return_value
     __typename
   }
 }
-'''
+"""
 
-GRAPHQL_DEVICE_CHARGE_LOGS_QUERY = '''
-query getDeviceCalculatedChargeLogs($id: ID!, $limit: Int, $offset: Int, $minEnergy: Float, $dateFrom: Date) {
+GRAPHQL_DEVICE_CHARGE_LOGS_QUERY = """
+query getDeviceCalculatedChargeLogs(
+    $id: ID!
+    $limit: Int
+    $offset: Int
+    $minEnergy: Float
+    $dateFrom: Date
+) {
   getDevice(id: $id) {
     id
     deviceCalculatedChargeLogs(
@@ -42,56 +58,9 @@ query getDeviceCalculatedChargeLogs($id: ID!, $limit: Int, $offset: Int, $minEne
     __typename
   }
 }
-'''
+"""
 
-GRAPHQL_DEVICE_STATUS_QUERY = '''
-query getDeviceStatusSimple($id: ID!) {
-  getDevice(id: $id) {
-    name
-    deviceStatus {
-      id
-      online
-      evseState
-      sysChargingEnabled
-      sysUserLock
-      sysScheduleLock
-      sysProductName
-      sysProductId
-      sysHwVersion
-      evseHwVersion
-      chargeStatus {
-        start
-        chargeEnergyTotal
-        solarEnergyTotal
-        gridEnergyTotal
-        chargePower
-        chargePowerMax
-        solarPower
-        gridPower
-        duration
-      }
-      scheduleSlotsArray {
-        startHour
-        startMinute
-        endHour
-        endMinute
-        enabled
-        dayMap {
-          monday
-          tuesday
-          wednesday
-          thursday
-          friday
-          saturday
-          sunday
-        }
-      }
-    }
-  }
-}
-'''
-
-GRAPHQL_DEVICE_INFO_QUERY = '''
+GRAPHQL_DEVICE_INFO_QUERY = """
 query getDevice($id: ID!) {
   getDevice(id: $id) {
     id
@@ -173,9 +142,9 @@ query getDevice($id: ID!) {
     }
   }
 }
-'''
+"""
 
-GRAPHQL_DEVICE_STATUS_DETAILED_QUERY = '''
+GRAPHQL_DEVICE_STATUS_DETAILED_QUERY = """
 query getDeviceStatus($id: ID!) {
   getDevice(id: $id) {
     name
@@ -276,4 +245,4 @@ query getDeviceStatus($id: ID!) {
     }
   }
 }
-'''
+"""

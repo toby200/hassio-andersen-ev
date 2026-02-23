@@ -1,11 +1,12 @@
 import asyncio
-import json
-import time
 import logging
+import time
+
 import requests
+from pycognito.aws_srp import AWSSRP
+
 from . import const
 from .device import KonnectDevice
-from pycognito.aws_srp import AWSSRP
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,10 +39,9 @@ class KonnectClient:
         self.username = await self.__fetchUsername()
 
         try:
-            # Run the AWS SRP authentication in an executor to avoid blocking the event loop
-            aws_response = await asyncio.get_event_loop().run_in_executor(
-                None, self.__authenticate_with_aws_srp
-            )
+            # Run the AWS SRP authentication in an executor
+            # to avoid blocking the event loop
+            aws_response = await asyncio.get_event_loop().run_in_executor(None, self.__authenticate_with_aws_srp)
 
             aws_result = aws_response["AuthenticationResult"]
             self.token = aws_result["IdToken"]
@@ -49,18 +49,13 @@ class KonnectClient:
             self.tokenExpiresIn = aws_result["ExpiresIn"]
             # Calculate absolute expiry time (subtract 5 minutes for safety margin)
             self.tokenExpiryTime = time.time() + aws_result["ExpiresIn"] - 90
-            self.refreshToken = aws_result[
-                "RefreshToken"
-            ]  # Still store for future use if needed
+            self.refreshToken = aws_result["RefreshToken"]
 
-            _LOGGER.debug(
-                "Authentication successful, token will expire in %s seconds",
-                aws_result["ExpiresIn"],
-            )
+            _LOGGER.debug("Authentication successful, token will expire in %s seconds", aws_result["ExpiresIn"])
 
         except Exception as e:
             _LOGGER.error("Authentication failed: %s", str(e))
-            raise Exception(f"Failed to sign in: {str(e)}")
+            raise RuntimeError(f"Failed to sign in: {e!s}") from e
 
     def __authenticate_with_aws_srp(self):
         # This is executed in the executor pool
@@ -80,13 +75,8 @@ class KonnectClient:
 
     async def is_token_valid(self):
         """Check if the current token is still valid."""
-        if not self.token:
+        if not self.token or not self.tokenExpiryTime:
             return False
-
-        if not self.tokenExpiryTime:
-            return False
-
-        # Check if token is expired
         return time.time() < self.tokenExpiryTime
 
     async def getDevices(self):
@@ -100,7 +90,9 @@ class KonnectClient:
         response = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: requests.get(
-                url, headers={"Authorization": f"Bearer {self.token}"}
+                url,
+                headers={"Authorization": f"Bearer {self.token}"},
+                timeout=30,
             ),
         )
 
@@ -111,11 +103,7 @@ class KonnectClient:
                 await self.refresh_token()
                 return await self.getDevices()
 
-            _LOGGER.error(
-                "Failed to get devices. Status Code: %s, Response: %s",
-                response.status_code,
-                response.text,
-            )
+            _LOGGER.error("Failed to get devices. Status Code: %s, Response: %s", response.status_code, response.text)
             return devices
 
         response_body = response.json()
@@ -147,17 +135,17 @@ class KonnectClient:
 
         # Run blocking requests call in an executor to avoid blocking the event loop
         response = await asyncio.get_event_loop().run_in_executor(
-            None, lambda: requests.post(url, json=body)
+            None, lambda: requests.post(url, json=body, timeout=30)
         )
 
         if response.status_code != 200:
-            raise Exception("Incorrect email address")
+            raise RuntimeError("Incorrect email address")
 
         # {'error': 'Pending user with email "x" not found'}
         # {'username': 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx:x'}
         response_body = response.json()
         if "username" not in response_body:
-            raise Exception("Incorrect email address")
+            raise RuntimeError("Incorrect email address")
 
         return response_body["username"]
 
@@ -169,7 +157,5 @@ class KonnectClient:
         else:
             _LOGGER.debug(
                 "Token still valid, expiry in %s seconds",
-                int(self.tokenExpiryTime - time.time())
-                if self.tokenExpiryTime
-                else "unknown",
+                int(self.tokenExpiryTime - time.time()) if self.tokenExpiryTime else "unknown",
             )
