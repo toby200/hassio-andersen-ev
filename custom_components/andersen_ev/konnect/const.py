@@ -5,6 +5,16 @@ GRAPHQL_USER_MAP_URL = "https://graphql.andersen-ev.com/get-pending-user"
 
 API_DEVICES_URL = "https://mobile.andersen-ev.com/api/getDevices"
 
+GRAPHQL_SET_SCHEDULES_MUTATION = """
+mutation setSchedules($deviceId: ID!, $scheduleSlots: ScheduleSlotsInput!) {
+  setSchedules(deviceId: $deviceId, scheduleSlots: $scheduleSlots) {
+    id
+    name
+    return_value
+  }
+}
+"""
+
 GRAPHQL_RUN_COMMAND_QUERY = """
 mutation runAEVCommand($deviceId: ID!, $functionName: String!, $params: String) {
   runAEVCommand(deviceId: $deviceId, functionName: $functionName, params: $params) {
@@ -46,53 +56,6 @@ query getDeviceCalculatedChargeLogs(
       __typename
     }
     __typename
-  }
-}
-"""
-
-GRAPHQL_DEVICE_STATUS_QUERY = """
-query getDeviceStatusSimple($id: ID!) {
-  getDevice(id: $id) {
-    name
-    deviceStatus {
-      id
-      online
-      evseState
-      sysChargingEnabled
-      sysUserLock
-      sysScheduleLock
-      sysProductName
-      sysProductId
-      sysHwVersion
-      evseHwVersion
-      chargeStatus {
-        start
-        chargeEnergyTotal
-        solarEnergyTotal
-        gridEnergyTotal
-        chargePower
-        chargePowerMax
-        solarPower
-        gridPower
-        duration
-      }
-      scheduleSlotsArray {
-        startHour
-        startMinute
-        endHour
-        endMinute
-        enabled
-        dayMap {
-          monday
-          tuesday
-          wednesday
-          thursday
-          friday
-          saturday
-          sunday
-        }
-      }
-    }
   }
 }
 """

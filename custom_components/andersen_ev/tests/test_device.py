@@ -10,13 +10,13 @@ class TestDeviceGraphQLCalls:
     """Test GraphQL calls from KonnectDevice."""
 
     @pytest.mark.asyncio
-    async def test_get_device_status_success(self, mock_device, graphql_device_status_response):
-        """Test successful get_device_status call."""
+    async def test_get_detailed_device_status_success(self, mock_device, graphql_device_status_response):
+        """Test successful get_detailed_device_status call."""
         # Mock the GraphQLClient.execute_query method
         mock_device.graphql_client.execute_query = AsyncMock(return_value=graphql_device_status_response)
 
         # Call the method
-        status = await mock_device.get_device_status()
+        status = await mock_device.get_detailed_device_status()
 
         # Assertions
         assert status is not None
@@ -27,26 +27,26 @@ class TestDeviceGraphQLCalls:
         # Verify the method was called correctly
         mock_device.graphql_client.execute_query.assert_called_once()
         call_args = mock_device.graphql_client.execute_query.call_args
-        assert call_args[1]["operation_name"] == "getDeviceStatusSimple"
+        assert call_args[1]["operation_name"] == "getDeviceStatus"
         assert call_args[1]["variables"]["id"] == "test_device_123"
 
     @pytest.mark.asyncio
-    async def test_get_device_status_error_response(self, mock_device):
-        """Test get_device_status with invalid response format."""
+    async def test_get_detailed_device_status_error_response(self, mock_device):
+        """Test get_detailed_device_status with invalid response format."""
         # Return response missing deviceStatus
         invalid_response = {"getDevice": {"name": "Test"}}
         mock_device.graphql_client.execute_query = AsyncMock(return_value=invalid_response)
 
-        status = await mock_device.get_device_status()
+        status = await mock_device.get_detailed_device_status()
         assert status is None
 
     @pytest.mark.asyncio
-    async def test_get_device_status_graphql_error(self, mock_device):
-        """Test get_device_status when GraphQL returns None (error)."""
+    async def test_get_detailed_device_status_graphql_error(self, mock_device):
+        """Test get_detailed_device_status when GraphQL returns None (error)."""
         # GraphQLClient returns None when there are errors
         mock_device.graphql_client.execute_query = AsyncMock(return_value=None)
 
-        status = await mock_device.get_device_status()
+        status = await mock_device.get_detailed_device_status()
         assert status is None
 
     @pytest.mark.asyncio
@@ -129,7 +129,7 @@ class TestDeviceGraphQLCalls:
         """Test that GraphQL client is used for requests."""
         mock_device.graphql_client.execute_query = AsyncMock(return_value=graphql_device_status_response)
 
-        await mock_device.get_device_status()
+        await mock_device.get_detailed_device_status()
 
         # Verify execute_query was called
         mock_device.graphql_client.execute_query.assert_called_once()

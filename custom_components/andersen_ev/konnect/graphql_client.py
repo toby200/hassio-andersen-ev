@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from gql import Client, gql
@@ -52,7 +52,7 @@ class GraphQLClient:
     def __init__(
         self,
         token: str,
-        token_refresh: Callable[[], Any],
+        token_refresh: Callable[[], Awaitable[tuple[str, float | None]]],
         url: str = const.GRAPHQL_URL,
         token_expiry_time: float | None = None,
     ) -> None:
@@ -64,6 +64,8 @@ class GraphQLClient:
         self._session = None
         self._refresh_handle: asyncio.TimerHandle | None = None
         self._initial_expiry_time = token_expiry_time
+        self._refresh_task: asyncio.Task[None] | None = None
+        self._connect_lock = asyncio.Lock()
 
     @property
     def token(self) -> str:
@@ -77,40 +79,51 @@ class GraphQLClient:
         if self._session is not None:
             return
 
-        transport = AIOHTTPTransport(
-            url=self.url,
-            headers={"Authorization": f"Bearer {self._token}"},
-        )
-        self._client = Client(
-            transport=transport,
-            fetch_schema_from_transport=False,
-        )
-        self._session = await self._client.connect_async()
+        async with self._connect_lock:
+            # Re-check after acquiring the lock
+            if self._session is not None:
+                return
 
-        # Schedule proactive refresh on first connect if we know expiry
-        if self._initial_expiry_time is not None:
-            self._schedule_token_refresh(self._initial_expiry_time)
-            self._initial_expiry_time = None
+            transport = AIOHTTPTransport(
+                url=self.url,
+                headers={"Authorization": f"Bearer {self._token}"},
+            )
+            self._client = Client(
+                transport=transport,
+                fetch_schema_from_transport=False,
+            )
+            self._session = await self._client.connect_async()
+
+            # Schedule proactive refresh on first connect if we know expiry
+            if self._initial_expiry_time is not None:
+                self._schedule_token_refresh(self._initial_expiry_time)
+                self._initial_expiry_time = None
 
     async def _reconnect_with_token(self, token: str) -> None:
         """Close the current session and reconnect with a new token."""
-        self._token = token
+        async with self._connect_lock:
+            self._token = token
 
-        if self._client is not None:
-            try:
-                await self._client.close_async()
-            except (TransportServerError, TransportQueryError, OSError) as err:
-                _LOGGER.debug("Error closing client during reconnect: %s", err)
+            if self._client is not None:
+                try:
+                    await self._client.close_async()
+                except (TransportServerError, TransportQueryError, OSError) as err:
+                    _LOGGER.debug("Error closing client during reconnect: %s", err)
 
-        self._client = None
-        self._session = None
+            self._client = None
+            self._session = None
+
         await self._ensure_connected()
 
     async def close(self) -> None:
-        """Close the client session and cancel any pending refresh timer."""
+        """Close the client session and cancel any pending refresh timer/task."""
         if self._refresh_handle is not None:
             self._refresh_handle.cancel()
             self._refresh_handle = None
+
+        if self._refresh_task is not None:
+            self._refresh_task.cancel()
+            self._refresh_task = None
 
         if self._client is not None:
             try:
@@ -213,16 +226,19 @@ class GraphQLClient:
 
         if delay <= 0:
             _LOGGER.debug("Token near expiry, scheduling immediate refresh")
-            self._refresh_handle = None  # no timer, task runs immediately
-            asyncio.ensure_future(self._proactive_refresh())  # noqa: RUF006
-            return
+            delay = 0
 
         _LOGGER.debug("Scheduled proactive token refresh in %d seconds", int(delay))
         loop = asyncio.get_running_loop()
         self._refresh_handle = loop.call_later(
             delay,
-            lambda: asyncio.ensure_future(self._proactive_refresh()),
+            self._create_refresh_task,
         )
+
+    def _create_refresh_task(self) -> None:
+        """Create a task for proactive token refresh, storing the reference."""
+        self._refresh_task = asyncio.create_task(self._proactive_refresh())
+        self._refresh_task.add_done_callback(lambda _: setattr(self, "_refresh_task", None))
 
     async def _proactive_refresh(self) -> None:
         """Proactive refresh triggered by the scheduled timer."""

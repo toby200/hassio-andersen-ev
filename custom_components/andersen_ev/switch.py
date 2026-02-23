@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import asyncio
 import copy
-import json
 import logging
 from typing import Any
 
-import requests
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -18,7 +15,6 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from . import AndersenEvCoordinator
 from .const import DOMAIN
 from .konnect import const
-from .konnect.bearerauth import BearerAuth
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -218,88 +214,21 @@ class AndersenEvScheduleSwitch(CoordinatorEntity, SwitchEntity):  # pylint: disa
 
     async def _send_set_schedules_mutation(self, schedule_slots, enabled=None) -> bool:
         """Send the setSchedules mutation to the Andersen EV API."""
-        # Ensure we have a valid token
-        try:
-            await self._device.api.ensure_valid_auth()
+        _LOGGER.debug("Sending schedule update for device %s, payload: %s", self._device.friendly_name, schedule_slots)
 
-            url = const.GRAPHQL_URL
-            query = """
-mutation setSchedules($deviceId: ID!, $scheduleSlots: ScheduleSlotsInput!) {
-  setSchedules(deviceId: $deviceId, scheduleSlots: $scheduleSlots) {
-    id
-    name
-    return_value
-  }
-}
-"""
-
-            variables = {
+        result = await self._device.graphql_client.execute_mutation(
+            operation_name="setSchedules",
+            mutation=const.GRAPHQL_SET_SCHEDULES_MUTATION,
+            variables={
                 "deviceId": self._device.device_id,
                 "scheduleSlots": schedule_slots,
-            }
+            },
+        )
 
-            body = {
-                "operationName": "setSchedules",
-                "variables": variables,
-                "query": query,
-            }
-
-            # Add debug logging to see what we're sending
-            _LOGGER.debug("Sending schedule update for device %s, payload: %s", self._device.friendly_name, variables)
-
-            try:
-                response = await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    lambda: requests.post(url, json=body, auth=BearerAuth(self._device.api.token), timeout=30),
-                )
-
-                if response.status_code == 401:
-                    # Token expired, refresh and retry
-                    _LOGGER.debug("Authentication token expired during schedule update, refreshing")
-                    await self._device.api.refresh_token()
-                    return await self._send_set_schedules_mutation(schedule_slots, enabled)
-
-                if response.status_code != 200:
-                    _LOGGER.warning("Failed to update schedule, status code: %s", response.status_code)
-                    return False
-
-                # Parse response and check for errors
-                try:
-                    response_body = response.json()
-                    # Log the full response for analysis
-                    _LOGGER.debug("API Response JSON: %s", json.dumps(response_body))
-                except Exception as json_err:  # noqa: BLE001  # pylint: disable=broad-exception-caught
-                    _LOGGER.error("Error parsing JSON response: %s", json_err)
-                    return False
-
-                if not response_body:
-                    _LOGGER.error("Empty response received from API")
-                    return False
-
-                if "errors" in response_body:
-                    _LOGGER.warning("GraphQL errors in response: %s", response_body["errors"])
-                    return False
-
-                # Consider it successful if data present
-                # and no errors, even if setSchedules is null
-                if "data" in response_body and "errors" not in response_body:
-                    state_text = "enabled" if enabled else "disabled" if enabled is not None else "updated"
-                    _LOGGER.info("Schedule %s for %s %s", self._schedule_name, self._device.friendly_name, state_text)
-                    return True
-
-                # Assume success based on status code 200
-                _LOGGER.debug(
-                    "No clear success/failure indicator in response, assuming success based on status code 200"
-                )
-                return True
-
-            except requests.RequestException as req_err:
-                _LOGGER.error("Request error updating schedule: %s", req_err)
-                return False
-
-            except Exception as err:  # noqa: BLE001  # pylint: disable=broad-exception-caught
-                _LOGGER.error("Error updating schedule: %s", err)
-                return False
-        except Exception as outer_err:  # noqa: BLE001  # pylint: disable=broad-exception-caught
-            _LOGGER.error("Authentication error in schedule update: %s", outer_err)
+        if result is None:
+            _LOGGER.warning("Failed to update schedule for %s", self._device.friendly_name)
             return False
+
+        state_text = "enabled" if enabled else "disabled" if enabled is not None else "updated"
+        _LOGGER.info("Schedule %s for %s %s", self._schedule_name, self._device.friendly_name, state_text)
+        return True

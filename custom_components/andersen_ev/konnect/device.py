@@ -130,11 +130,13 @@ class KonnectDevice:
         _LOGGER.debug("API command response: %s", result)
         return True
 
-    async def get_device_status(self):
-        """Get the real-time status of the device."""
+    async def get_detailed_device_status(self):
+        """Get the detailed status of the device."""
+        _LOGGER.debug("Fetching detailed status for device %s (%s)", self.device_id, self.friendly_name)
+
         result = await self.graphql_client.execute_query(
-            operation_name="getDeviceStatusSimple",
-            query=const.GRAPHQL_DEVICE_STATUS_QUERY,
+            operation_name="getDeviceStatus",
+            query=const.GRAPHQL_DEVICE_STATUS_DETAILED_QUERY,
             variables={"id": self.device_id},
         )
 
@@ -150,12 +152,18 @@ class KonnectDevice:
             self.model_name = result["getDevice"]["name"]
             _LOGGER.debug("Model name for device %s: %s", self.friendly_name, self.model_name)
 
-        # Store the last status for reference
         status = result["getDevice"]["deviceStatus"]
+        self._log_status_changes(status)
+        self._last_status = status
+        return status
 
-        # Log changes to important status values
+    def _log_status_changes(self, status: dict) -> None:
+        """Log changes to important status values compared to last known status."""
+        if not self._last_status:
+            return
+
         log_changes = False
-        if self._last_status and "evseState" in status and "evseState" in self._last_status:
+        if "evseState" in status and "evseState" in self._last_status:
             if status["evseState"] != self._last_status["evseState"]:
                 _LOGGER.info(
                     "Device %s: EVSE state changed from %s to %s",
@@ -165,7 +173,7 @@ class KonnectDevice:
                 )
                 log_changes = True
 
-        if self._last_status and "online" in status and "online" in self._last_status:
+        if "online" in status and "online" in self._last_status:
             if status["online"] != self._last_status["online"]:
                 _LOGGER.info(
                     "Device %s: Online state changed from %s to %s",
@@ -177,9 +185,6 @@ class KonnectDevice:
 
         if log_changes:
             _LOGGER.debug("Full status for %s: %s", self.friendly_name, status)
-
-        self._last_status = status
-        return status
 
     async def get_last_charge(self):
         """Get the last charge session data."""
@@ -239,56 +244,3 @@ class KonnectDevice:
         device_info = result["getDevice"]
         _LOGGER.debug("Successfully retrieved device info for %s", self.friendly_name)
         return device_info
-
-    async def get_detailed_device_status(self):
-        """Get the detailed status of the device."""
-        _LOGGER.debug("Fetching detailed status for device %s (%s)", self.device_id, self.friendly_name)
-
-        result = await self.graphql_client.execute_query(
-            operation_name="getDeviceStatus",
-            query=const.GRAPHQL_DEVICE_STATUS_DETAILED_QUERY,
-            variables={"id": self.device_id},
-        )
-
-        if result is None:
-            return None
-
-        if "getDevice" not in result or "deviceStatus" not in result["getDevice"]:
-            _LOGGER.warning("Invalid response format from detailed device status request")
-            return None
-
-        # Store the model name if available
-        if "name" in result["getDevice"]:
-            self.model_name = result["getDevice"]["name"]
-            _LOGGER.debug("Model name for device %s: %s", self.friendly_name, self.model_name)
-
-        # Store the last status for reference in the lock entity
-        status = result["getDevice"]["deviceStatus"]
-
-        # Log changes to important status values
-        log_changes = False
-        if self._last_status and "evseState" in status and "evseState" in self._last_status:
-            if status["evseState"] != self._last_status["evseState"]:
-                _LOGGER.info(
-                    "Device %s: EVSE state changed from %s to %s",
-                    self.friendly_name,
-                    self._last_status["evseState"],
-                    status["evseState"],
-                )
-                log_changes = True
-
-        if self._last_status and "online" in status and "online" in self._last_status:
-            if status["online"] != self._last_status["online"]:
-                _LOGGER.info(
-                    "Device %s: Online state changed from %s to %s",
-                    self.friendly_name,
-                    self._last_status["online"],
-                    status["online"],
-                )
-                log_changes = True
-
-        if log_changes:
-            _LOGGER.debug("Full detailed status for %s: %s", self.friendly_name, status)
-
-        self._last_status = status
-        return status
