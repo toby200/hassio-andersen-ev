@@ -36,48 +36,40 @@ async def async_setup_entry(
         # Get device info including schedule names and schedule slots
         device_info = await device.get_device_info()
         if not device_info or "deviceInfo" not in device_info:
-            _LOGGER.warning(
-                f"Could not retrieve device info for {device.friendly_name}"
-            )
+            _LOGGER.warning("Could not retrieve device info for %s", device.friendly_name)
             continue
 
         # Get schedule slots from device_info
-        if (
-            "deviceStatus" not in device_info
-            or "scheduleSlotsArray" not in device_info["deviceStatus"]
-        ):
-            _LOGGER.warning(
-                f"Could not retrieve schedule slots for {device.friendly_name}"
-            )
+        if "deviceStatus" not in device_info or "scheduleSlotsArray" not in device_info["deviceStatus"]:
+            _LOGGER.warning("Could not retrieve schedule slots for %s", device.friendly_name)
             continue
 
         schedule_slots = device_info["deviceStatus"]["scheduleSlotsArray"]
         device_info_data = device_info["deviceInfo"]
 
         # Create switches for each schedule
-        for idx, slot in enumerate(schedule_slots):
-            # Get the schedule name from deviceInfo if available, to be set as an attribute
+        for idx, _slot in enumerate(schedule_slots):
+            # Get the schedule name from deviceInfo if available
             schedule_name_key = f"schedule{idx}Name"
-            if (
-                schedule_name_key in device_info_data
-                and device_info_data[schedule_name_key]
-            ):
+            if device_info_data.get(schedule_name_key):
                 schedule_name = device_info_data[schedule_name_key]
             else:
                 schedule_name = f"Schedule {idx + 1}"
 
-            entities.append(
-                AndersenEvScheduleSwitch(coordinator, device, idx, schedule_name)
-            )
+            entities.append(AndersenEvScheduleSwitch(coordinator, device, idx, schedule_name))
 
     async_add_entities(entities)
 
 
-class AndersenEvScheduleSwitch(CoordinatorEntity, SwitchEntity):
+class AndersenEvScheduleSwitch(CoordinatorEntity, SwitchEntity):  # pylint: disable=abstract-method
     """Representation of an Andersen EV charging schedule switch."""
 
     def __init__(
-        self, coordinator: AndersenEvCoordinator, device, index: int, schedule_name: str
+        self,
+        coordinator: AndersenEvCoordinator,
+        device,
+        index: int,
+        schedule_name: str,
     ) -> None:
         """Initialize the switch."""
         super().__init__(coordinator)
@@ -91,7 +83,7 @@ class AndersenEvScheduleSwitch(CoordinatorEntity, SwitchEntity):
             "identifiers": {(DOMAIN, device.device_id)},
             "name": f"{device.friendly_name} ({device.device_id})",
             "manufacturer": "Andersen EV",
-            "model": "A2",  # Default model, will be updated if available
+            "model": "A2",
         }
         self._attr_icon = "mdi:calendar-clock"
         self._update_model_from_device_status()
@@ -110,8 +102,8 @@ class AndersenEvScheduleSwitch(CoordinatorEntity, SwitchEntity):
         if hasattr(self._device, "model_name") and self._device.model_name:
             self._attr_device_info["model"] = self._device.model_name
         # Fall back to the information from device status
-        elif hasattr(self._device, "_last_status") and self._device._last_status:
-            status = self._device._last_status
+        elif self._device.last_status:
+            status = self._device.last_status
             if "sysProductName" in status:
                 self._attr_device_info["model"] = status["sysProductName"]
             elif "sysProductId" in status:
@@ -140,18 +132,15 @@ class AndersenEvScheduleSwitch(CoordinatorEntity, SwitchEntity):
 
         # Try to get the latest scheduleSlotsArray from the device's last status
         # This ensures we pick up changes made in the mobile app
-        if hasattr(self._device, "_last_status") and self._device._last_status:
-            status = self._device._last_status
-            if (
-                "scheduleSlotsArray" in status
-                and len(status["scheduleSlotsArray"]) > self._schedule_index
-            ):
+        if self._device.last_status:
+            status = self._device.last_status
+            if "scheduleSlotsArray" in status and len(status["scheduleSlotsArray"]) > self._schedule_index:
                 schedule_slot = status["scheduleSlotsArray"][self._schedule_index]
                 return schedule_slot["enabled"]
 
         # If we can't get the state from the last status, return False as a safe default
         _LOGGER.debug(
-            f"Could not determine state for schedule {self._schedule_index} of {self._device.friendly_name}"
+            "Could not determine state for schedule %s of %s", self._schedule_index, self._device.friendly_name
         )
         return False
 
@@ -167,11 +156,7 @@ class AndersenEvScheduleSwitch(CoordinatorEntity, SwitchEntity):
         """Set the enabled state of the schedule."""
         try:
             # Get the current schedule slots from the device's last status
-            if (
-                not hasattr(self._device, "_last_status")
-                or not self._device._last_status
-                or "scheduleSlotsArray" not in self._device._last_status
-            ):
+            if not self._device.last_status or "scheduleSlotsArray" not in self._device.last_status:
                 # If we don't have the data in the coordinator, fetch it
                 device_info = await self._device.get_device_info()
                 if (
@@ -180,17 +165,14 @@ class AndersenEvScheduleSwitch(CoordinatorEntity, SwitchEntity):
                     or "scheduleSlotsArray" not in device_info["deviceStatus"]
                 ):
                     _LOGGER.warning(
-                        f"Failed to get schedule slots for {self._device.friendly_name}"
+                        "Failed to get schedule slots for %s",
+                        self._device.friendly_name,
                     )
                     return
-                schedule_slots = copy.deepcopy(
-                    device_info["deviceStatus"]["scheduleSlotsArray"]
-                )
+                schedule_slots = copy.deepcopy(device_info["deviceStatus"]["scheduleSlotsArray"])
             else:
                 # Use the data from the coordinator
-                schedule_slots = copy.deepcopy(
-                    self._device._last_status["scheduleSlotsArray"]
-                )
+                schedule_slots = copy.deepcopy(self._device.last_status["scheduleSlotsArray"])
 
             # Modify the enabled state of the specified schedule
             if len(schedule_slots) > self._schedule_index:
@@ -202,38 +184,20 @@ class AndersenEvScheduleSwitch(CoordinatorEntity, SwitchEntity):
                 formatted_slots = {f"sch{self._schedule_index}": schedule_to_update}
 
                 # Send the properly formatted schedule slots to the API
-                success = await self._send_set_schedules_mutation(
-                    formatted_slots, enabled
-                )
+                success = await self._send_set_schedules_mutation(formatted_slots, enabled)
 
                 if success:
-                    # Update the local state immediately to reflect the change
-                    if (
-                        hasattr(self._device, "_last_status")
-                        and self._device._last_status
-                    ):
-                        if "scheduleSlotsArray" not in self._device._last_status:
-                            # Initialize scheduleSlotsArray if it doesn't exist
-                            self._device._last_status["scheduleSlotsArray"] = (
-                                schedule_slots
-                            )
-                        elif (
-                            len(self._device._last_status["scheduleSlotsArray"])
-                            <= self._schedule_index
-                        ):
+                    # Update the local state immediately
+                    if self._device.last_status:
+                        if "scheduleSlotsArray" not in self._device.last_status:
+                            self._device.last_status["scheduleSlotsArray"] = schedule_slots
+                        elif len(self._device.last_status["scheduleSlotsArray"]) <= self._schedule_index:
                             # Extend the array if needed
-                            while (
-                                len(self._device._last_status["scheduleSlotsArray"])
-                                <= self._schedule_index
-                            ):
-                                self._device._last_status["scheduleSlotsArray"].append(
-                                    {}
-                                )
+                            while len(self._device.last_status["scheduleSlotsArray"]) <= self._schedule_index:
+                                self._device.last_status["scheduleSlotsArray"].append({})
 
-                        # Update the enabled state in the device's last_status
-                        self._device._last_status["scheduleSlotsArray"][
-                            self._schedule_index
-                        ]["enabled"] = enabled
+                        # Update the enabled state
+                        self._device.last_status["scheduleSlotsArray"][self._schedule_index]["enabled"] = enabled
 
                     # Force the entity to update its state immediately
                     self.async_write_ha_state()
@@ -242,13 +206,15 @@ class AndersenEvScheduleSwitch(CoordinatorEntity, SwitchEntity):
                     await self.coordinator.async_request_refresh()
                 else:
                     _LOGGER.warning(
-                        f"Failed to update schedule state for {self._device.friendly_name} Schedule {self._schedule_index + 1}"
+                        "Failed to update schedule state for %s Schedule %s",
+                        self._device.friendly_name,
+                        self._schedule_index + 1,
                     )
             else:
-                _LOGGER.warning(f"Schedule index {self._schedule_index} out of range")
+                _LOGGER.warning("Schedule index %s out of range", self._schedule_index)
 
-        except Exception as err:
-            _LOGGER.error(f"Error setting schedule state: {err}")
+        except Exception as err:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            _LOGGER.error("Error setting schedule state: %s", err)
 
     async def _send_set_schedules_mutation(self, schedule_slots, enabled=None) -> bool:
         """Send the setSchedules mutation to the Andersen EV API."""
@@ -279,41 +245,31 @@ mutation setSchedules($deviceId: ID!, $scheduleSlots: ScheduleSlotsInput!) {
             }
 
             # Add debug logging to see what we're sending
-            _LOGGER.debug(
-                f"Sending schedule update for device {self._device.friendly_name}, payload: {variables}"
-            )
+            _LOGGER.debug("Sending schedule update for device %s, payload: %s", self._device.friendly_name, variables)
 
             try:
                 response = await asyncio.get_event_loop().run_in_executor(
                     None,
-                    lambda: requests.post(
-                        url, json=body, auth=BearerAuth(self._device.api.token)
-                    ),
+                    lambda: requests.post(url, json=body, auth=BearerAuth(self._device.api.token), timeout=30),
                 )
 
                 if response.status_code == 401:
                     # Token expired, refresh and retry
-                    _LOGGER.debug(
-                        "Authentication token expired during schedule update, refreshing"
-                    )
+                    _LOGGER.debug("Authentication token expired during schedule update, refreshing")
                     await self._device.api.refresh_token()
-                    return await self._send_set_schedules_mutation(
-                        schedule_slots, enabled
-                    )
+                    return await self._send_set_schedules_mutation(schedule_slots, enabled)
 
                 if response.status_code != 200:
-                    _LOGGER.warning(
-                        f"Failed to update schedule, status code: {response.status_code}"
-                    )
+                    _LOGGER.warning("Failed to update schedule, status code: %s", response.status_code)
                     return False
 
                 # Parse response and check for errors
                 try:
                     response_body = response.json()
                     # Log the full response for analysis
-                    _LOGGER.debug(f"API Response JSON: {json.dumps(response_body)}")
-                except Exception as json_err:
-                    _LOGGER.error(f"Error parsing JSON response: {json_err}")
+                    _LOGGER.debug("API Response JSON: %s", json.dumps(response_body))
+                except Exception as json_err:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+                    _LOGGER.error("Error parsing JSON response: %s", json_err)
                     return False
 
                 if not response_body:
@@ -321,39 +277,29 @@ mutation setSchedules($deviceId: ID!, $scheduleSlots: ScheduleSlotsInput!) {
                     return False
 
                 if "errors" in response_body:
-                    _LOGGER.warning(
-                        f"GraphQL errors in response: {response_body['errors']}"
-                    )
+                    _LOGGER.warning("GraphQL errors in response: %s", response_body["errors"])
                     return False
 
-                # If there's data and no errors, consider it successful - even if setSchedules is null
-                # Based on the actual response format {"data": {"setSchedules": null}}
+                # Consider it successful if data present
+                # and no errors, even if setSchedules is null
                 if "data" in response_body and "errors" not in response_body:
-                    state_text = (
-                        "enabled"
-                        if enabled
-                        else "disabled"
-                        if enabled is not None
-                        else "updated"
-                    )
-                    _LOGGER.info(
-                        f"Schedule {self._schedule_name} for {self._device.friendly_name} {state_text}"
-                    )
+                    state_text = "enabled" if enabled else "disabled" if enabled is not None else "updated"
+                    _LOGGER.info("Schedule %s for %s %s", self._schedule_name, self._device.friendly_name, state_text)
                     return True
 
-                # If we didn't get a clear error or success, assume success if status code was 200
+                # Assume success based on status code 200
                 _LOGGER.debug(
-                    f"No clear success/failure indicator in response, assuming success based on status code 200"
+                    "No clear success/failure indicator in response, assuming success based on status code 200"
                 )
                 return True
 
             except requests.RequestException as req_err:
-                _LOGGER.error(f"Request error updating schedule: {req_err}")
+                _LOGGER.error("Request error updating schedule: %s", req_err)
                 return False
 
-            except Exception as err:
-                _LOGGER.error(f"Error updating schedule: {err}")
+            except Exception as err:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+                _LOGGER.error("Error updating schedule: %s", err)
                 return False
-        except Exception as outer_err:
-            _LOGGER.error(f"Authentication error in schedule update: {outer_err}")
+        except Exception as outer_err:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            _LOGGER.error("Authentication error in schedule update: %s", outer_err)
             return False

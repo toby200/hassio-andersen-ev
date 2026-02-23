@@ -5,8 +5,9 @@ import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from andersen_ev.konnect.graphql_client import GraphQLClient
 from gql.transport.exceptions import TransportQueryError, TransportServerError
+
+from andersen_ev.konnect.graphql_client import GraphQLClient
 
 
 class TestGraphQLClient:
@@ -217,9 +218,7 @@ class TestGraphQLClient:
     @pytest.mark.asyncio
     async def test_server_error_non_401(self):
         """Test non-401 server errors return None."""
-        mock_client, _ = self._make_mock_client(
-            execute_side_effect=TransportServerError("Server error", code=500)
-        )
+        mock_client, _ = self._make_mock_client(execute_side_effect=TransportServerError("Server error", code=500))
 
         with patch(
             "andersen_ev.konnect.graphql_client.Client",
@@ -260,9 +259,7 @@ class TestGraphQLClient:
     @pytest.mark.asyncio
     async def test_network_exception(self):
         """Test network exceptions return None."""
-        mock_client, _ = self._make_mock_client(
-            execute_side_effect=ConnectionError("Network error")
-        )
+        mock_client, _ = self._make_mock_client(execute_side_effect=ConnectionError("Network error"))
 
         with patch(
             "andersen_ev.konnect.graphql_client.Client",
@@ -295,9 +292,7 @@ class TestGraphQLClient:
             )
             result = await client.execute_mutation(
                 operation_name="runCommand",
-                mutation=(
-                    "mutation runCommand($id: ID!) { runCommand(id: $id) { success } }"
-                ),
+                mutation=("mutation runCommand($id: ID!) { runCommand(id: $id) { success } }"),
                 variables={"id": "123"},
             )
             await client.close()

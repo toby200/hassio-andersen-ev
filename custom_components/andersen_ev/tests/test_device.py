@@ -10,14 +10,10 @@ class TestDeviceGraphQLCalls:
     """Test GraphQL calls from KonnectDevice."""
 
     @pytest.mark.asyncio
-    async def test_get_device_status_success(
-        self, mock_device, graphql_device_status_response
-    ):
+    async def test_get_device_status_success(self, mock_device, graphql_device_status_response):
         """Test successful get_device_status call."""
         # Mock the GraphQLClient.execute_query method
-        mock_device.graphql_client.execute_query = AsyncMock(
-            return_value=graphql_device_status_response
-        )
+        mock_device.graphql_client.execute_query = AsyncMock(return_value=graphql_device_status_response)
 
         # Call the method
         status = await mock_device.get_device_status()
@@ -39,9 +35,7 @@ class TestDeviceGraphQLCalls:
         """Test get_device_status with invalid response format."""
         # Return response missing deviceStatus
         invalid_response = {"getDevice": {"name": "Test"}}
-        mock_device.graphql_client.execute_query = AsyncMock(
-            return_value=invalid_response
-        )
+        mock_device.graphql_client.execute_query = AsyncMock(return_value=invalid_response)
 
         status = await mock_device.get_device_status()
         assert status is None
@@ -56,13 +50,9 @@ class TestDeviceGraphQLCalls:
         assert status is None
 
     @pytest.mark.asyncio
-    async def test_get_last_charge_success(
-        self, mock_device, graphql_charge_logs_response
-    ):
+    async def test_get_last_charge_success(self, mock_device, graphql_charge_logs_response):
         """Test successful get_last_charge call."""
-        mock_device.graphql_client.execute_query = AsyncMock(
-            return_value=graphql_charge_logs_response
-        )
+        mock_device.graphql_client.execute_query = AsyncMock(return_value=graphql_charge_logs_response)
 
         charge_log = await mock_device.get_last_charge()
 
@@ -75,21 +65,15 @@ class TestDeviceGraphQLCalls:
         """Test get_last_charge with empty logs."""
         # Empty logs response
         empty_response = {"getDevice": {"deviceCalculatedChargeLogs": []}}
-        mock_device.graphql_client.execute_query = AsyncMock(
-            return_value=empty_response
-        )
+        mock_device.graphql_client.execute_query = AsyncMock(return_value=empty_response)
 
         charge_log = await mock_device.get_last_charge()
         assert charge_log is None
 
     @pytest.mark.asyncio
-    async def test_get_device_info_success(
-        self, mock_device, graphql_device_info_response
-    ):
+    async def test_get_device_info_success(self, mock_device, graphql_device_info_response):
         """Test successful get_device_info call."""
-        mock_device.graphql_client.execute_query = AsyncMock(
-            return_value=graphql_device_info_response
-        )
+        mock_device.graphql_client.execute_query = AsyncMock(return_value=graphql_device_info_response)
 
         device_info = await mock_device.get_device_info()
 
@@ -100,35 +84,25 @@ class TestDeviceGraphQLCalls:
     @pytest.mark.asyncio
     async def test_enable_charging(self, mock_device, graphql_command_success_response):
         """Test enable charging."""
-        mock_device.graphql_client.execute_mutation = AsyncMock(
-            return_value=graphql_command_success_response
-        )
+        mock_device.graphql_client.execute_mutation = AsyncMock(return_value=graphql_command_success_response)
 
         result = await mock_device.enable()
 
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_disable_charging(
-        self, mock_device, graphql_command_success_response
-    ):
+    async def test_disable_charging(self, mock_device, graphql_command_success_response):
         """Test disable charging."""
-        mock_device.graphql_client.execute_mutation = AsyncMock(
-            return_value=graphql_command_success_response
-        )
+        mock_device.graphql_client.execute_mutation = AsyncMock(return_value=graphql_command_success_response)
 
         result = await mock_device.disable()
 
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_disable_all_schedules_success(
-        self, mock_device, graphql_command_success_response
-    ):
+    async def test_disable_all_schedules_success(self, mock_device, graphql_command_success_response):
         """Test successful disable_all_schedules."""
-        mock_device.graphql_client.execute_mutation = AsyncMock(
-            return_value=graphql_command_success_response
-        )
+        mock_device.graphql_client.execute_mutation = AsyncMock(return_value=graphql_command_success_response)
 
         result = await mock_device.disable_all_schedules()
 
@@ -153,9 +127,7 @@ class TestDeviceGraphQLCalls:
     @pytest.mark.asyncio
     async def test_graphql_url_used(self, mock_device, graphql_device_status_response):
         """Test that GraphQL client is used for requests."""
-        mock_device.graphql_client.execute_query = AsyncMock(
-            return_value=graphql_device_status_response
-        )
+        mock_device.graphql_client.execute_query = AsyncMock(return_value=graphql_device_status_response)
 
         await mock_device.get_device_status()
 

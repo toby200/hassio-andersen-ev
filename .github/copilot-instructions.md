@@ -14,9 +14,20 @@ ruff format <modified_files>
 - Use `collections.abc` for `Callable`, `Mapping`, `Sequence`, etc. instead of `typing` (Ruff UP035).
 - Prefer `X | Y` union syntax over `Optional[X]` or `Union[X, Y]` (Ruff UP007).
 - Make sure all imports are sorted and grouped correctly and there are no unused imports (Ruff F401, I001, I002). Always fix imports in the files you modified, even if they were not directly related to your changes.
+- Keep code compact without unccessary new or blank lines, but do not sacrifice readability. Keep lines to 120 chars
 
 ## Tests
 
 Run pytest to ensure that your changes do not break existing tests
 When creating or editing existing code, make sure that it is covered by a test. If you are adding new functionality, add a new test for it. If you are modifying existing functionality, make sure that the existing tests still pass and consider adding new tests if necessary.
 
+# Keep it simple
+
+When writing code, try to keep it simple and easy to understand. Avoid unnecessary complexity and strive for clarity. If you find yourself writing complex code, consider refactoring it to make it simpler.
+
+## Andersen EV specific
+- When working on the Andersen EV integration, make sure to follow the Home Assistant development guidelines and best practices.
+- You can make a few assumptions about Andersen usage:
+  - Most users will have a single device
+  - The device will very rarely if ever be removed, but you can't assume it will never be removed. Don't worry too much around timing or data cleanup etc for removal or adding of devices as it very rarely happens after the initial setup, just keep it simple and handle common cases.
+  - API tokens need to be refreshed before their expiry time, but apart from that assume tokens will be generally be valid. If a request fails from a bad token, then try a single refresh of the token and retry the request, but if it fails again then it's likely a real issue and you can log an error and give up on the request. Don't overcomplicate token management with locks and timeouts etc, just keep it simple and handle the common cases.

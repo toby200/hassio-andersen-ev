@@ -30,6 +30,11 @@ class KonnectDevice:
         self._graphql_client = None
 
     @property
+    def last_status(self):
+        """Return the last known device status."""
+        return self._last_status
+
+    @property
     def graphql_client(self) -> GraphQLClient:
         """Lazily create the GraphQL client on first use."""
         if self._graphql_client is None:
@@ -52,79 +57,39 @@ class KonnectDevice:
 
     async def reset_rcm(self):
         """Reset RCM fault on the device."""
-        _LOGGER.debug(
-            "Attempting to reset RCM for device %s (%s)",
-            self.device_id,
-            self.friendly_name,
-        )
+        _LOGGER.debug("Attempting to reset RCM for device %s (%s)", self.device_id, self.friendly_name)
         success = await self._run_command("rcmReset")
         if success:
-            _LOGGER.debug(
-                "Successfully reset RCM for device %s (%s)",
-                self.device_id,
-                self.friendly_name,
-            )
+            _LOGGER.debug("Successfully reset RCM for device %s (%s)", self.device_id, self.friendly_name)
         else:
-            _LOGGER.warning(
-                "Failed to reset RCM for device %s (%s)",
-                self.device_id,
-                self.friendly_name,
-            )
+            _LOGGER.warning("Failed to reset RCM for device %s (%s)", self.device_id, self.friendly_name)
         return success
 
     async def enable(self):
         """Enable charging by unlocking user lock."""
-        _LOGGER.debug(
-            "Attempting to enable charging for device %s (%s)",
-            self.device_id,
-            self.friendly_name,
-        )
+        _LOGGER.debug("Attempting to enable charging for device %s (%s)", self.device_id, self.friendly_name)
         success = await self._run_command("userUnlock")
         if success:
-            _LOGGER.debug(
-                "Successfully enabled charging for device %s (%s)",
-                self.device_id,
-                self.friendly_name,
-            )
+            _LOGGER.debug("Successfully enabled charging for device %s (%s)", self.device_id, self.friendly_name)
             self.user_lock = True
         else:
-            _LOGGER.warning(
-                "Failed to enable charging for device %s (%s)",
-                self.device_id,
-                self.friendly_name,
-            )
+            _LOGGER.warning("Failed to enable charging for device %s (%s)", self.device_id, self.friendly_name)
         return success
 
     async def disable(self):
         """Disable charging by locking user lock."""
-        _LOGGER.debug(
-            "Attempting to disable charging for device %s (%s)",
-            self.device_id,
-            self.friendly_name,
-        )
+        _LOGGER.debug("Attempting to disable charging for device %s (%s)", self.device_id, self.friendly_name)
         success = await self._run_command("userLock")
         if success:
-            _LOGGER.debug(
-                "Successfully disabled charging for device %s (%s)",
-                self.device_id,
-                self.friendly_name,
-            )
+            _LOGGER.debug("Successfully disabled charging for device %s (%s)", self.device_id, self.friendly_name)
             self.user_lock = False
         else:
-            _LOGGER.warning(
-                "Failed to disable charging for device %s (%s)",
-                self.device_id,
-                self.friendly_name,
-            )
+            _LOGGER.warning("Failed to disable charging for device %s (%s)", self.device_id, self.friendly_name)
         return success
 
     async def disable_all_schedules(self):
         """Disable all charging schedules for the device."""
-        _LOGGER.debug(
-            "Attempting to disable all schedules for device %s (%s)",
-            self.device_id,
-            self.friendly_name,
-        )
+        _LOGGER.debug("Attempting to disable all schedules for device %s (%s)", self.device_id, self.friendly_name)
 
         mutation = (
             "mutation setAllSchedulesDisabled($deviceId: ID!)"
@@ -132,10 +97,7 @@ class KonnectDevice:
             " { id name return_value } }"
         )
 
-        _LOGGER.debug(
-            "Sending API command to disable all schedules for device %s",
-            self.device_id,
-        )
+        _LOGGER.debug("Sending API command to disable all schedules for device %s", self.device_id)
 
         result = await self.graphql_client.execute_mutation(
             operation_name="setAllSchedulesDisabled",
@@ -151,11 +113,7 @@ class KonnectDevice:
 
     async def _run_command(self, function):
         """Run a command on the device with automatic token refresh."""
-        _LOGGER.debug(
-            "Sending API command: %s for device %s",
-            function,
-            self.device_id,
-        )
+        _LOGGER.debug("Sending API command: %s for device %s", function, self.device_id)
 
         result = await self.graphql_client.execute_mutation(
             operation_name="runAEVCommand",
@@ -190,22 +148,14 @@ class KonnectDevice:
         # Store the model name if available
         if "name" in result["getDevice"]:
             self.model_name = result["getDevice"]["name"]
-            _LOGGER.debug(
-                "Model name for device %s: %s",
-                self.friendly_name,
-                self.model_name,
-            )
+            _LOGGER.debug("Model name for device %s: %s", self.friendly_name, self.model_name)
 
         # Store the last status for reference
         status = result["getDevice"]["deviceStatus"]
 
         # Log changes to important status values
         log_changes = False
-        if (
-            self._last_status
-            and "evseState" in status
-            and "evseState" in self._last_status
-        ):
+        if self._last_status and "evseState" in status and "evseState" in self._last_status:
             if status["evseState"] != self._last_status["evseState"]:
                 _LOGGER.info(
                     "Device %s: EVSE state changed from %s to %s",
@@ -226,11 +176,7 @@ class KonnectDevice:
                 log_changes = True
 
         if log_changes:
-            _LOGGER.debug(
-                "Full status for %s: %s",
-                self.friendly_name,
-                status,
-            )
+            _LOGGER.debug("Full status for %s: %s", self.friendly_name, status)
 
         self._last_status = status
         return status
@@ -251,19 +197,13 @@ class KonnectDevice:
         if result is None:
             return None
 
-        if (
-            "getDevice" not in result
-            or "deviceCalculatedChargeLogs" not in result["getDevice"]
-        ):
+        if "getDevice" not in result or "deviceCalculatedChargeLogs" not in result["getDevice"]:
             _LOGGER.warning("Invalid response format from last charge request")
             return None
 
         device_logs = result["getDevice"]["deviceCalculatedChargeLogs"]
         if len(device_logs) == 0:
-            _LOGGER.debug(
-                "No charge logs available for device %s",
-                self.friendly_name,
-            )
+            _LOGGER.debug("No charge logs available for device %s", self.friendly_name)
             return None
 
         latest_log = device_logs[0]
@@ -281,11 +221,7 @@ class KonnectDevice:
 
     async def get_device_info(self):
         """Get the detailed device information."""
-        _LOGGER.debug(
-            "Fetching detailed info for device %s (%s)",
-            self.device_id,
-            self.friendly_name,
-        )
+        _LOGGER.debug("Fetching detailed info for device %s (%s)", self.device_id, self.friendly_name)
 
         result = await self.graphql_client.execute_query(
             operation_name="getDevice",
@@ -301,19 +237,12 @@ class KonnectDevice:
             return None
 
         device_info = result["getDevice"]
-        _LOGGER.debug(
-            "Successfully retrieved device info for %s",
-            self.friendly_name,
-        )
+        _LOGGER.debug("Successfully retrieved device info for %s", self.friendly_name)
         return device_info
 
     async def get_detailed_device_status(self):
         """Get the detailed status of the device."""
-        _LOGGER.debug(
-            "Fetching detailed status for device %s (%s)",
-            self.device_id,
-            self.friendly_name,
-        )
+        _LOGGER.debug("Fetching detailed status for device %s (%s)", self.device_id, self.friendly_name)
 
         result = await self.graphql_client.execute_query(
             operation_name="getDeviceStatus",
@@ -325,30 +254,20 @@ class KonnectDevice:
             return None
 
         if "getDevice" not in result or "deviceStatus" not in result["getDevice"]:
-            _LOGGER.warning(
-                "Invalid response format from detailed device status request"
-            )
+            _LOGGER.warning("Invalid response format from detailed device status request")
             return None
 
         # Store the model name if available
         if "name" in result["getDevice"]:
             self.model_name = result["getDevice"]["name"]
-            _LOGGER.debug(
-                "Model name for device %s: %s",
-                self.friendly_name,
-                self.model_name,
-            )
+            _LOGGER.debug("Model name for device %s: %s", self.friendly_name, self.model_name)
 
         # Store the last status for reference in the lock entity
         status = result["getDevice"]["deviceStatus"]
 
         # Log changes to important status values
         log_changes = False
-        if (
-            self._last_status
-            and "evseState" in status
-            and "evseState" in self._last_status
-        ):
+        if self._last_status and "evseState" in status and "evseState" in self._last_status:
             if status["evseState"] != self._last_status["evseState"]:
                 _LOGGER.info(
                     "Device %s: EVSE state changed from %s to %s",
@@ -369,11 +288,7 @@ class KonnectDevice:
                 log_changes = True
 
         if log_changes:
-            _LOGGER.debug(
-                "Full detailed status for %s: %s",
-                self.friendly_name,
-                status,
-            )
+            _LOGGER.debug("Full detailed status for %s: %s", self.friendly_name, status)
 
         self._last_status = status
         return status

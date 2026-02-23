@@ -1,16 +1,17 @@
 """Config flow for Andersen EV integration."""
+
 import logging
+
 import voluptuous as vol
-
-# Import the konnect module from the local directory
-from .konnect.client import KonnectClient
-
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 
-from .const import DOMAIN, CONF_EMAIL, CONF_PASSWORD
+from .const import CONF_EMAIL, CONF_PASSWORD, DOMAIN
+
+# Import the konnect module from the local directory
+from .konnect.client import KonnectClient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -21,7 +22,8 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
     }
 )
 
-async def validate_input(hass: HomeAssistant, data):
+
+async def validate_input(_hass: HomeAssistant, data):
     """Validate the user input allows us to connect.
 
     Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
@@ -31,10 +33,10 @@ async def validate_input(hass: HomeAssistant, data):
         client = KonnectClient(data[CONF_EMAIL], data[CONF_PASSWORD])
         await client.authenticate_user()
         devices = await client.getDevices()
-        
+
         if not devices:
             raise CannotConnect("No Andersen EV devices found")
-        
+
         # Return info to be stored in the config entry
         return {"title": f"Andersen EV ({data[CONF_EMAIL]})"}
     except Exception as e:
@@ -44,7 +46,7 @@ async def validate_input(hass: HomeAssistant, data):
         raise CannotConnect from e
 
 
-class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # pylint: disable=abstract-method
     """Handle a config flow for Andersen EV."""
 
     VERSION = 1
@@ -64,9 +66,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
 
-        return self.async_show_form(
-            step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
-        )
+        return self.async_show_form(step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors)
 
 
 class CannotConnect(HomeAssistantError):
