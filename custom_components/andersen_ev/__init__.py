@@ -22,7 +22,7 @@ from .const import (
 )
 from .konnect.client import KonnectClient
 
-PLATFORMS = [Platform.LOCK, Platform.SENSOR, Platform.SWITCH]
+PLATFORMS = [Platform.LOCK, Platform.NUMBER, Platform.SENSOR, Platform.SWITCH]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -201,5 +201,11 @@ class AndersenEvCoordinator(DataUpdateCoordinator):
                 await device.get_detailed_device_status()
             except UpdateFailed:
                 _LOGGER.debug("Error getting status for %s", device.friendly_name)
+
+            # Fetch solar status for each device
+            try:
+                await device.get_solar()
+            except UpdateFailed as err:
+                _LOGGER.debug("Error getting solar status for %s: %s", device.friendly_name, err)
 
         return self.devices

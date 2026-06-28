@@ -16,6 +16,7 @@ class KonnectDevice:
     friendly_name = None
     user_lock = False
     _last_status = None
+    _last_solar_status = None
     model_name = None
     _graphql_client = None  # GraphQL client instance
 
@@ -26,6 +27,7 @@ class KonnectDevice:
         self.friendly_name = friendly_name
         self.user_lock = user_lock
         self._last_status = None
+        self._last_solar_status = None
         self.model_name = None
         self._graphql_client = None
 
@@ -33,6 +35,11 @@ class KonnectDevice:
     def last_status(self):
         """Return the last known device status."""
         return self._last_status
+
+    @property
+    def last_solar_status(self):
+        """Return the last known solar status."""
+        return self._last_solar_status or {}
 
     @property
     def graphql_client(self) -> GraphQLClient:
@@ -239,11 +246,13 @@ class KonnectDevice:
             )
             return None
 
-        return {
+        solar_status = {
             "solarOverride": status.get("solarOverride"),
             "solarChargeAlways": status.get("solarChargeAlways"),
             "solarMaxGridChargePercent": status.get("solarMaxGridChargePercent"),
         }
+        self._last_solar_status = solar_status
+        return solar_status
 
     async def set_solar(
         self,
@@ -251,7 +260,6 @@ class KonnectDevice:
         override: bool | None = None,
         charge_always: bool | None = None,
         max_grid_charge_percent: int | None = None,
-        charge_outside_schedules: bool | None = None,
     ) -> bool:
         """Update solar charging settings on the device.
 
@@ -259,14 +267,12 @@ class KonnectDevice:
         """
         _LOGGER.debug(
             "Setting solar options for device %s (%s): "
-            "override=%s, charge_always=%s, max_grid_charge_percent=%s, "
-            "charge_outside_schedules=%s",
+            "override=%s, charge_always=%s, max_grid_charge_percent=%s",
             self.device_id,
             self.friendly_name,
             override,
             charge_always,
             max_grid_charge_percent,
-            charge_outside_schedules,
         )
 
         fields: dict[str, object] = {}
@@ -276,8 +282,6 @@ class KonnectDevice:
             fields["chargeAlways"] = charge_always
         if max_grid_charge_percent is not None:
             fields["maxGridChargePercent"] = max_grid_charge_percent
-        if charge_outside_schedules is not None:
-            fields["chargeOutsideSchedules"] = charge_outside_schedules
 
         return await self.graphql_client.set_solar(self.device_id, fields)
 

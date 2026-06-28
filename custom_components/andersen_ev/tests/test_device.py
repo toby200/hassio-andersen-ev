@@ -190,7 +190,6 @@ class TestDeviceGraphQLCalls:
             override=True,
             charge_always=False,
             max_grid_charge_percent=75,
-            charge_outside_schedules=True,
         )
 
         assert result is True
@@ -200,7 +199,6 @@ class TestDeviceGraphQLCalls:
                 "override": True,
                 "chargeAlways": False,
                 "maxGridChargePercent": 75,
-                "chargeOutsideSchedules": True,
             },
         )
 

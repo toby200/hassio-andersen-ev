@@ -18,5 +18,20 @@
     "abort": {
       "already_configured": "This account is already configured"
     }
+  },
+  "entity": {
+    "switch": {
+      "solar_override": {
+        "name": "Solar override"
+      },
+      "solar_charge_always": {
+        "name": "Solar charge always"
+      }
+    },
+    "number": {
+      "solar_max_grid_charge_percent": {
+        "name": "Solar max grid charge percent"
+      }
+    }
   }
 }
