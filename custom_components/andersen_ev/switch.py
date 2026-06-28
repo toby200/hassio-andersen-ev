@@ -272,3 +272,107 @@ class AndersenEvScheduleSwitch(AndersenEvDeviceInfoMixin, CoordinatorEntity[Ande
         state_text = "enabled" if enabled else "disabled" if enabled is not None else "updated"
         _LOGGER.info("Schedule %s for %s %s", self._schedule_name, self._device.friendly_name, state_text)
         return True
+
+
+class AndersenEvSolarSwitch(CoordinatorEntity, SwitchEntity):  # pylint: disable=abstract-method
+    """Base class for Andersen EV solar control switches."""
+
+    def __init__(
+        self,
+        coordinator: AndersenEvCoordinator,
+        device,
+        solar_field: str,
+        name_suffix: str,
+    ) -> None:
+        """Initialize the switch."""
+        super().__init__(coordinator)
+        self._device = device
+        self._solar_field = solar_field
+        self._attr_name = f"{device.friendly_name} {name_suffix}"
+        self._attr_unique_id = f"{device.device_id}_solar_{solar_field}"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, device.device_id)},
+            "name": f"{device.friendly_name} ({device.device_id})",
+            "manufacturer": "Andersen EV",
+            "model": "A2",
+        }
+        self._attr_icon = "mdi:solar-power"
+
+    def _update_model_from_device_status(self):
+        """Update model information from device status if available."""
+        if hasattr(self._device, "model_name") and self._device.model_name:
+            self._attr_device_info["model"] = self._device.model_name
+        elif self._device.last_status:
+            status = self._device.last_status
+            if "sysProductName" in status:
+                self._attr_device_info["model"] = status["sysProductName"]
+            elif "sysProductId" in status:
+                self._attr_device_info["model"] = status["sysProductId"]
+            elif "sysHwVersion" in status:
+                self._attr_device_info["model"] = f"A2 (HW: {status['sysHwVersion']})"
+
+    @property
+    def available(self) -> bool:
+        """Return if the switch is available."""
+        for device in self.coordinator.data:
+            if device.device_id == self._device.device_id:
+                self._device = device
+                return self.coordinator.last_update_success
+        return False
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Enable the solar setting."""
+        await self._set_solar_value(True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Disable the solar setting."""
+        await self._set_solar_value(False)
+
+    async def _set_solar_value(self, value: bool) -> None:
+        """Set the solar value."""
+        try:
+            # Map field names to set_solar parameter names
+            field_to_param = {
+                "solarOverride": "override",
+                "solarChargeAlways": "charge_always",
+                "solarChargeOutsideSchedules": "charge_outside_schedules",
+            }
+            param_name = field_to_param.get(self._solar_field)
+            if not param_name:
+                _LOGGER.error("Unknown solar field: %s", self._solar_field)
+                return
+
+            # Call set_solar with only the relevant parameter
+            kwargs_dict = {param_name: value}
+            success = await self._device.set_solar(**kwargs_dict)
+
+            if success:
+                # Force the entity to update its state immediately
+                self.async_write_ha_state()
+
+                # Request a refresh of the coordinator data to verify
+                await self.coordinator.async_request_refresh()
+            else:
+                _LOGGER.warning(
+                    "Failed to update solar setting %s for %s",
+                    self._solar_field,
+                    self._device.friendly_name,
+                )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.error("Error setting solar value: %s", err)
+
+
+class AndersenEvSolarOverrideSwitch(AndersenEvSolarSwitch):
+    """Switch for solar override control."""
+
+    def __init__(self, coordinator: AndersenEvCoordinator, device) -> None:
+        """Initialize the switch."""
+        super().__init__(coordinator, device, "solarOverride", "Solar override")
+
+
+class AndersenEvSolarChargeAlwaysSwitch(AndersenEvSolarSwitch):
+    """Switch for solar charge always control."""
+
+    def __init__(self, coordinator: AndersenEvCoordinator, device) -> None:
+        """Initialize the switch."""
+        super().__init__(coordinator, device, "solarChargeAlways", "Solar charge always")

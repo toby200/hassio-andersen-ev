@@ -1,7 +1,5 @@
 """Konnect device interface for Andersen EV chargers."""
 
-from __future__ import annotations
-
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -54,7 +52,9 @@ class KonnectDevice:
     def graphql_client(self) -> GraphQLClient:
         """Lazily create the GraphQL client on first use."""
         if self._graphql_client is None:
-            assert self.api.token is not None, "graphql_client accessed before authentication"
+            assert self.api.token is not None, (
+                "graphql_client accessed before authentication"
+            )
             self._graphql_client = GraphQLClient(
                 token=self.api.token,
                 token_refresh=self._refresh_graphql_token,
@@ -74,17 +74,33 @@ class KonnectDevice:
 
     async def reset_rcm(self):
         """Reset RCM fault on the device."""
-        _LOGGER.debug("Attempting to reset RCM for device %s (%s)", self.device_id, self.friendly_name)
+        _LOGGER.debug(
+            "Attempting to reset RCM for device %s (%s)",
+            self.device_id,
+            self.friendly_name,
+        )
         success = await self._run_command("rcmReset")
         if success:
-            _LOGGER.debug("Successfully reset RCM for device %s (%s)", self.device_id, self.friendly_name)
+            _LOGGER.debug(
+                "Successfully reset RCM for device %s (%s)",
+                self.device_id,
+                self.friendly_name,
+            )
         else:
-            _LOGGER.warning("Failed to reset RCM for device %s (%s)", self.device_id, self.friendly_name)
+            _LOGGER.warning(
+                "Failed to reset RCM for device %s (%s)",
+                self.device_id,
+                self.friendly_name,
+            )
         return success
 
     async def enable(self):
         """Enable charging by unlocking user lock."""
-        _LOGGER.debug("Attempting to enable charging for device %s (%s)", self.device_id, self.friendly_name)
+        _LOGGER.debug(
+            "Attempting to enable charging for device %s (%s)",
+            self.device_id,
+            self.friendly_name,
+        )
         success = await self._run_command("userUnlock")
         if success:
             _LOGGER.debug(
@@ -93,12 +109,20 @@ class KonnectDevice:
                 self.friendly_name,
             )
         else:
-            _LOGGER.warning("Failed to enable charging for device %s (%s)", self.device_id, self.friendly_name)
+            _LOGGER.warning(
+                "Failed to enable charging for device %s (%s)",
+                self.device_id,
+                self.friendly_name,
+            )
         return success
 
     async def disable(self):
         """Disable charging by locking user lock."""
-        _LOGGER.debug("Attempting to disable charging for device %s (%s)", self.device_id, self.friendly_name)
+        _LOGGER.debug(
+            "Attempting to disable charging for device %s (%s)",
+            self.device_id,
+            self.friendly_name,
+        )
         success = await self._run_command("userLock")
         if success:
             _LOGGER.debug(
@@ -107,12 +131,20 @@ class KonnectDevice:
                 self.friendly_name,
             )
         else:
-            _LOGGER.warning("Failed to disable charging for device %s (%s)", self.device_id, self.friendly_name)
+            _LOGGER.warning(
+                "Failed to disable charging for device %s (%s)",
+                self.device_id,
+                self.friendly_name,
+            )
         return success
 
     async def disable_all_schedules(self):
         """Disable all charging schedules for the device."""
-        _LOGGER.debug("Attempting to disable all schedules for device %s (%s)", self.device_id, self.friendly_name)
+        _LOGGER.debug(
+            "Attempting to disable all schedules for device %s (%s)",
+            self.device_id,
+            self.friendly_name,
+        )
 
         mutation = (
             "mutation setAllSchedulesDisabled($deviceId: ID!)"
@@ -120,7 +152,9 @@ class KonnectDevice:
             " { id name return_value } }"
         )
 
-        _LOGGER.debug("Sending API command to disable all schedules for device %s", self.device_id)
+        _LOGGER.debug(
+            "Sending API command to disable all schedules for device %s", self.device_id
+        )
 
         result = await self.graphql_client.execute_mutation(
             operation_name="setAllSchedulesDisabled",
@@ -155,7 +189,11 @@ class KonnectDevice:
 
     async def get_detailed_device_status(self):
         """Get the detailed status of the device."""
-        _LOGGER.debug("Fetching detailed status for device %s (%s)", self.device_id, self.friendly_name)
+        _LOGGER.debug(
+            "Fetching detailed status for device %s (%s)",
+            self.device_id,
+            self.friendly_name,
+        )
 
         result = await self.graphql_client.execute_query(
             operation_name="getDeviceStatus",
@@ -173,7 +211,9 @@ class KonnectDevice:
         # Store the model name if available
         if "name" in result["getDevice"]:
             self.model_name = result["getDevice"]["name"]
-            _LOGGER.debug("Model name for device %s: %s", self.friendly_name, self.model_name)
+            _LOGGER.debug(
+                "Model name for device %s: %s", self.friendly_name, self.model_name
+            )
 
         status = result["getDevice"]["deviceStatus"]
         self._log_status_changes(status)
@@ -225,7 +265,10 @@ class KonnectDevice:
         if result is None:
             return None
 
-        if "getDevice" not in result or "deviceCalculatedChargeLogs" not in result["getDevice"]:
+        if (
+            "getDevice" not in result
+            or "deviceCalculatedChargeLogs" not in result["getDevice"]
+        ):
             _LOGGER.warning("Invalid response format from last charge request")
             return None
 
@@ -284,14 +327,12 @@ class KonnectDevice:
         """
         _LOGGER.debug(
             "Setting solar options for device %s (%s): "
-            "override=%s, charge_always=%s, max_grid_charge_percent=%s, "
-            "charge_outside_schedules=%s",
+            "override=%s, charge_always=%s, max_grid_charge_percent=%s",
             self.device_id,
             self.friendly_name,
             override,
             charge_always,
             max_grid_charge_percent,
-            charge_outside_schedules,
         )
 
         fields: dict[str, object] = {}
@@ -308,7 +349,11 @@ class KonnectDevice:
 
     async def get_device_info(self):
         """Get the detailed device information."""
-        _LOGGER.debug("Fetching detailed info for device %s (%s)", self.device_id, self.friendly_name)
+        _LOGGER.debug(
+            "Fetching detailed info for device %s (%s)",
+            self.device_id,
+            self.friendly_name,
+        )
 
         result = await self.graphql_client.execute_query(
             operation_name="getDevice",

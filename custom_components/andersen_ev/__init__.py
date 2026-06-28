@@ -26,7 +26,7 @@ from .konnect.client import KonnectClient
 from .konnect.device import KonnectDevice
 from .konnect.exceptions import AndersenApiError, AndersenAuthError, AndersenError
 
-PLATFORMS = [Platform.LOCK, Platform.SENSOR, Platform.SWITCH]
+PLATFORMS = [Platform.LOCK, Platform.NUMBER, Platform.SENSOR, Platform.SWITCH]
 
 type AndersenEvConfigEntry = ConfigEntry[AndersenEvCoordinator]
 
@@ -282,6 +282,12 @@ class AndersenEvCoordinator(DataUpdateCoordinator[list[KonnectDevice]]):
                 await device.get_last_charge()
             except Exception as err:  # noqa: BLE001
                 _LOGGER.warning("Failed to fetch last charge for %s: %s", device.friendly_name, err)
+
+            # Fetch solar status for each device
+            try:
+                await device.get_solar()
+            except UpdateFailed as err:
+                _LOGGER.debug("Error getting solar status for %s: %s", device.friendly_name, err)
 
         return self.devices
 
