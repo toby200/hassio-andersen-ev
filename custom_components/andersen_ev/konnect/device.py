@@ -276,8 +276,14 @@ class KonnectDevice:
                 )
                 log_changes = True
 
-        if "solarMaxGridChargePercent" in status and "solarMaxGridChargePercent" in self._last_status:
-            if status["solarMaxGridChargePercent"] != self._last_status["solarMaxGridChargePercent"]:
+        if (
+            "solarMaxGridChargePercent" in status
+            and "solarMaxGridChargePercent" in self._last_status
+        ):
+            if (
+                status["solarMaxGridChargePercent"]
+                != self._last_status["solarMaxGridChargePercent"]
+            ):
                 _LOGGER.info(
                     "Device %s: Solar max grid charge percent changed from %s to %s",
                     self.friendly_name,
