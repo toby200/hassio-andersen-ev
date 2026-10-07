@@ -90,7 +90,7 @@
         "name": "Solar override"
       },
       "solar_charge_always": {
-        "name": "Solar charge always"
+        "name": "Supplement with grid power"
       }
     },
     "number": {
