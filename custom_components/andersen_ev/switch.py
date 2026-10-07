@@ -367,4 +367,4 @@ class AndersenEvSolarChargeAlwaysSwitch(AndersenEvSolarSwitch):
 
     def __init__(self, coordinator: AndersenEvCoordinator, device) -> None:
         """Initialize the switch."""
-        super().__init__(coordinator, device, "solarChargeAlways", "Solar charge always")
+        super().__init__(coordinator, device, "solarChargeAlways", "Supplement with grid power")

@@ -190,6 +190,46 @@ class KonnectDevice:
                 )
                 log_changes = True
 
+        if "solarChargeAlways" in status and "solarChargeAlways" in self._last_status:
+            if status["solarChargeAlways"] != self._last_status["solarChargeAlways"]:
+                _LOGGER.info(
+                    "Device %s: Solar charge always changed from %s to %s",
+                    self.friendly_name,
+                    self._last_status["solarChargeAlways"],
+                    status["solarChargeAlways"],
+                )
+                log_changes = True
+
+        if "solarOverride" in status and "solarOverride" in self._last_status:
+            if status["solarOverride"] != self._last_status["solarOverride"]:
+                _LOGGER.info(
+                    "Device %s: Solar override changed from %s to %s",
+                    self.friendly_name,
+                    self._last_status["solarOverride"],
+                    status["solarOverride"],
+                )
+                log_changes = True
+
+        if "sysScheduleLock" in status and "sysScheduleLock" in self._last_status:
+            if status["sysScheduleLock"] != self._last_status["sysScheduleLock"]:
+                _LOGGER.info(
+                    "Device %s: System schedule lock changed from %s to %s",
+                    self.friendly_name,
+                    self._last_status["sysScheduleLock"],
+                    status["sysScheduleLock"],
+                )
+                log_changes = True
+
+        if "solarMaxGridChargePercent" in status and "solarMaxGridChargePercent" in self._last_status:
+            if status["solarMaxGridChargePercent"] != self._last_status["solarMaxGridChargePercent"]:
+                _LOGGER.info(
+                    "Device %s: Solar max grid charge percent changed from %s to %s",
+                    self.friendly_name,
+                    self._last_status["solarMaxGridChargePercent"],
+                    status["solarMaxGridChargePercent"],
+                )
+                log_changes = True
+
         if log_changes:
             _LOGGER.debug("Full status for %s: %s", self.friendly_name, status)
 
@@ -266,8 +306,7 @@ class KonnectDevice:
         Only the provided (non-None) parameters are sent to the API.
         """
         _LOGGER.debug(
-            "Setting solar options for device %s (%s): "
-            "override=%s, charge_always=%s, max_grid_charge_percent=%s",
+            "Setting solar options for device %s (%s): override=%s, charge_always=%s, max_grid_charge_percent=%s",
             self.device_id,
             self.friendly_name,
             override,
